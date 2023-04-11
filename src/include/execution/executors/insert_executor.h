@@ -11,9 +11,9 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
@@ -24,7 +24,9 @@ namespace bustub {
 
 /**
  * InsertExecutor executes an insert on a table.
- * Inserted values are always pulled from a child executor.
+ *
+ * Unlike UPDATE and DELETE, inserted values may either be
+ * embedded in the plan itself or be pulled from a child executor.
  */
 class InsertExecutor : public AbstractExecutor {
  public:
@@ -32,7 +34,7 @@ class InsertExecutor : public AbstractExecutor {
    * Construct a new InsertExecutor instance.
    * @param exec_ctx The executor context
    * @param plan The insert plan to be executed
-   * @param child_executor The child executor from which inserted tuples are pulled
+   * @param child_executor The child executor from which inserted tuples are pulled (may be `nullptr`)
    */
   InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *plan,
                  std::unique_ptr<AbstractExecutor> &&child_executor);
@@ -41,22 +43,27 @@ class InsertExecutor : public AbstractExecutor {
   void Init() override;
 
   /**
-   * Yield the number of rows inserted into the table.
-   * @param[out] tuple The integer tuple indicating the number of rows inserted into the table
-   * @param[out] rid The next tuple RID produced by the insert (ignore, not used)
+   * Yield the next tuple from the insert.
+   * @param[out] tuple The next tuple produced by the insert
+   * @param[out] rid The next tuple RID produced by the insert
    * @return `true` if a tuple was produced, `false` if there are no more tuples
    *
+   * NOTE: InsertExecutor::Next() does not use the `tuple` out-parameter.
    * NOTE: InsertExecutor::Next() does not use the `rid` out-parameter.
-   * NOTE: InsertExecutor::Next() returns true with number of inserted rows produced only once.
    */
-  auto Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool override;
+  bool Next([[maybe_unused]] Tuple *tuple, RID *rid) override;
 
   /** @return The output schema for the insert */
-  auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
+  const Schema *GetOutputSchema() override { return plan_->OutputSchema(); };
 
  private:
   /** The insert plan node to be executed*/
   const InsertPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
+  bool is_raw_insert_;
+  TableInfo *table_info_;
+  std::vector<IndexInfo *> index_info_;
+  std::vector<std::vector<bustub::Value>>::const_iterator values_iter_;  // 记录raw_value数组当前访问位置
 };
 
 }  // namespace bustub

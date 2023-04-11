@@ -12,11 +12,14 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
+#include "execution/expressions/abstract_expression.h"
 #include "execution/plans/hash_join_plan.h"
 #include "storage/table/tuple.h"
 
@@ -42,18 +45,33 @@ class HashJoinExecutor : public AbstractExecutor {
 
   /**
    * Yield the next tuple from the join.
-   * @param[out] tuple The next tuple produced by the join.
-   * @param[out] rid The next tuple RID, not used by hash join.
-   * @return `true` if a tuple was produced, `false` if there are no more tuples.
+   * @param[out] tuple The next tuple produced by the join
+   * @param[out] rid The next tuple RID produced by the join
+   * @return `true` if a tuple was produced, `false` if there are no more tuples
    */
-  auto Next(Tuple *tuple, RID *rid) -> bool override;
+  bool Next(Tuple *tuple, RID *rid) override;
 
   /** @return The output schema for the join */
-  auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
+  const Schema *GetOutputSchema() override { return plan_->OutputSchema(); };
 
  private:
+  struct MapComparator {  // 重载map的key值排序方式
+    bool operator()(const Value &v1, const Value &v2) const { return v1.CompareLessThan(v2) == CmpBool::CmpTrue; }
+  };
+  void TupleSchemaTranformUseEvaluateJoin(const Tuple *left_tuple, const Schema *left_schema, const Tuple *right_tuple,
+                                          const Schema *right_schema, Tuple *dest_tuple, const Schema *dest_schema);
   /** The NestedLoopJoin plan node to be executed. */
   const HashJoinPlanNode *plan_;
+  /** The child executor to obtain value from */
+  std::unique_ptr<AbstractExecutor> left_executor_;
+  std::unique_ptr<AbstractExecutor> right_executor_;
+  std::map<Value, std::vector<Tuple>, MapComparator> hash_table_;  // 不使用unordered_map，需要实现两个方法hash和==
+  bool left_need_next_;
+  uint8_t array_index_;  // 记录左半部元组对应的tuple数组访问位置
+
+  Tuple left_tuple_;  // 存储左半部当前元组
+  Value left_key_;
+  RID left_rid_;
 };
 
 }  // namespace bustub

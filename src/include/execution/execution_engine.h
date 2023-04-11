@@ -16,14 +16,11 @@
 
 #include "buffer/buffer_pool_manager.h"
 #include "catalog/catalog.h"
-#include "concurrency/transaction.h"
 #include "concurrency/transaction_manager.h"
 #include "execution/executor_context.h"
 #include "execution/executor_factory.h"
-#include "execution/executors/init_check_executor.h"
 #include "execution/plans/abstract_plan.h"
 #include "storage/table/tuple.h"
-
 namespace bustub {
 
 /**
@@ -50,60 +47,38 @@ class ExecutionEngine {
    * @param exec_ctx The executor context in which the query executes
    * @return `true` if execution of the query plan succeeds, `false` otherwise
    */
-  // NOLINTNEXTLINE
-  auto Execute(const AbstractPlanNodeRef &plan, std::vector<Tuple> *result_set, Transaction *txn,
-               ExecutorContext *exec_ctx) -> bool {
-    BUSTUB_ASSERT((txn == exec_ctx->GetTransaction()), "Broken Invariant");
-
-    // Construct the executor for the abstract plan node
+  bool Execute(const AbstractPlanNode *plan, std::vector<Tuple> *result_set, Transaction *txn,
+               ExecutorContext *exec_ctx) {
+    // Construct and executor for the plan
     auto executor = ExecutorFactory::CreateExecutor(exec_ctx, plan);
 
-    // Initialize the executor
-    auto executor_succeeded = true;
+    // Prepare the root executor
+    executor->Init();
 
+    // Execute the query plan
     try {
-      executor->Init();
-      PollExecutor(executor.get(), plan, result_set);
-      PerformChecks(exec_ctx);
-    } catch (const ExecutionException &ex) {
-      executor_succeeded = false;
-      if (result_set != nullptr) {
-        result_set->clear();
+      Tuple tuple; //元组
+      RID rid; //元组相对于它所属的表的唯一标识符
+      while (executor->Next(&tuple, &rid)) {
+        if (result_set != nullptr && tuple.IsAllocated()) {  // 判断元组是否分配内存
+          result_set->push_back(tuple);
+        }
       }
+    } catch (Exception &e) {
+      // TODO(student): handle exceptions
+      printf("exception occur!\n");  // 删除失败，直接返回false
+      return false;
     }
 
-    return executor_succeeded;
-  }
-
-  void PerformChecks(ExecutorContext *exec_ctx) {
-    for (const auto &[left_executor, right_executor] : exec_ctx->GetNLJCheckExecutorSet()) {
-      auto casted_left_executor = dynamic_cast<const InitCheckExecutor *>(left_executor);
-      auto casted_right_executor = dynamic_cast<const InitCheckExecutor *>(right_executor);
-      BUSTUB_ASSERT(casted_left_executor->GetNextCount() == casted_right_executor->GetInitCount(),
-                    "nlj check failed, are you initialising the right executor correctly?");
-    }
+    return true;
   }
 
  private:
-  /**
-   * Poll the executor until exhausted, or exception escapes.
-   * @param executor The root executor
-   * @param plan The plan to execute
-   * @param result_set The tuple result set
-   */
-  static void PollExecutor(AbstractExecutor *executor, const AbstractPlanNodeRef &plan,
-                           std::vector<Tuple> *result_set) {
-    RID rid{};
-    Tuple tuple{};
-    while (executor->Next(&tuple, &rid)) {
-      if (result_set != nullptr) {
-        result_set->push_back(tuple);
-      }
-    }
-  }
-
+  /** The buffer pool manager used during query execution */
   [[maybe_unused]] BufferPoolManager *bpm_;
+  /** The transaction manager used during query execution */
   [[maybe_unused]] TransactionManager *txn_mgr_;
+  /** The catalog used during query execution */
   [[maybe_unused]] Catalog *catalog_;
 };
 

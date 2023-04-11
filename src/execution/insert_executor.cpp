@@ -18,10 +18,51 @@ namespace bustub {
 
 InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *plan,
                                std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx) {}
+    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {
+  is_raw_insert_ = plan_->IsRawInsert();
+}
 
-void InsertExecutor::Init() { throw NotImplementedException("InsertExecutor is not implemented"); }
+void InsertExecutor::Init() {
+  if (!is_raw_insert_) {  // 初始化子计划或者数组迭代器
+    child_executor_->Init();
+  } else {
+    values_iter_ = plan_->RawValues().cbegin();
+  }
 
-auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool { return false; }
+  auto table_oid = plan_->TableOid();
+  table_info_ = exec_ctx_->GetCatalog()->GetTable(table_oid);
+  index_info_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
+}
+
+bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
+  auto transaction = exec_ctx_->GetTransaction();
+  auto table_schema = table_info_->schema_;
+  Tuple insert_tuple;
+  RID insert_rid;  // 插入表后才被赋值
+  bool res;
+
+  if (!is_raw_insert_) {
+    res = child_executor_->Next(&insert_tuple, &insert_rid);
+  } else {
+    if (values_iter_ == plan_->RawValues().cend()) {
+      res = false;
+    } else {
+      insert_tuple = Tuple(*values_iter_, &table_schema);  // 合成元组
+      ++values_iter_;                                      // 移向下一位置
+      res = true;
+    }
+  }
+
+  if (res) {
+    table_info_->table_->InsertTuple(insert_tuple, &insert_rid, transaction);  // insert_rid此时才被赋值
+    Tuple key_tuple;
+    for (auto info : index_info_) {  // 更新索引
+      key_tuple = insert_tuple.KeyFromTuple(table_schema, info->key_schema_, info->index_->GetKeyAttrs());
+      info->index_->InsertEntry(key_tuple, insert_rid, transaction);
+    }
+  }
+
+  return res;
+}
 
 }  // namespace bustub
