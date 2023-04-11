@@ -54,21 +54,20 @@ void AggregationExecutor::Init() {
   aht_iterator_ = aht_.Begin();
 }
 
-bool AggregationExecutor::Next(Tuple *tuple, RID *rzid) {
+auto AggregationExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   auto output_schema = plan_->OutputSchema();
   auto having_exr = plan_->GetHaving();
-  bool having_res;
+  bool res;
   while (aht_iterator_ != aht_.End()) {
-    having_res = true;
+    res = true;
     if (having_exr != nullptr) {
-      having_res =
+      res =
           having_exr->EvaluateAggregate(aht_iterator_.Key().group_bys_, aht_iterator_.Val().aggregates_).GetAs<bool>();
     }
 
-    if (having_res) {
+    if (res) {
       TupleSchemaTranformUseEvaluateAggregate(aht_iterator_.Key().group_bys_, aht_iterator_.Val().aggregates_, tuple,
                                               output_schema);
-      // *rid = tuple->GetRid(); 合成的元组没有RID，没必要赋值
       ++aht_iterator_;  // 指向下一位置
       return true;
     }

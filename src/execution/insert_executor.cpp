@@ -10,9 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <memory>
-
 #include "execution/executors/insert_executor.h"
+#include "concurrency/transaction.h"
 
 namespace bustub {
 
@@ -34,8 +33,12 @@ void InsertExecutor::Init() {
   index_info_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
 }
 
-bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
+auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   auto transaction = exec_ctx_->GetTransaction();
+  auto lockmanager = exec_ctx_->GetLockManager();
+  auto table_oid = plan_->TableOid();
+  auto catalog = exec_ctx_->GetCatalog();
+
   auto table_schema = table_info_->schema_;
   Tuple insert_tuple;
   RID insert_rid;  // 插入表后才被赋值
@@ -55,10 +58,14 @@ bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
 
   if (res) {
     table_info_->table_->InsertTuple(insert_tuple, &insert_rid, transaction);  // insert_rid此时才被赋值
+    lockmanager->LockExclusive(transaction, insert_rid);                       // 加上写锁
     Tuple key_tuple;
     for (auto info : index_info_) {  // 更新索引
       key_tuple = insert_tuple.KeyFromTuple(table_schema, info->key_schema_, info->index_->GetKeyAttrs());
       info->index_->InsertEntry(key_tuple, insert_rid, transaction);
+      // 维护IndexWriteSet
+      transaction->AppendIndexWriteRecord(IndexWriteRecord{insert_rid, table_oid, WType::INSERT, insert_tuple,
+                                                           insert_tuple, info->index_oid_, catalog});
     }
   }
 

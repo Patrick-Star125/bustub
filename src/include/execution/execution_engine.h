@@ -47,8 +47,8 @@ class ExecutionEngine {
    * @param exec_ctx The executor context in which the query executes
    * @return `true` if execution of the query plan succeeds, `false` otherwise
    */
-  bool Execute(const AbstractPlanNode *plan, std::vector<Tuple> *result_set, Transaction *txn,
-               ExecutorContext *exec_ctx) {
+  auto Execute(const AbstractPlanNode *plan, std::vector<Tuple> *result_set, Transaction *txn,
+               ExecutorContext *exec_ctx) -> bool {
     // Construct and executor for the plan
     auto executor = ExecutorFactory::CreateExecutor(exec_ctx, plan);
 
@@ -57,16 +57,15 @@ class ExecutionEngine {
 
     // Execute the query plan
     try {
-      Tuple tuple; //元组
-      RID rid; //元组相对于它所属的表的唯一标识符
+      Tuple tuple;
+      RID rid;
       while (executor->Next(&tuple, &rid)) {
         if (result_set != nullptr && tuple.IsAllocated()) {  // 判断元组是否分配内存
-          result_set->push_back(tuple);
+          result_set->emplace_back(tuple);
         }
       }
     } catch (Exception &e) {
       // TODO(student): handle exceptions
-      printf("exception occur!\n");  // 删除失败，直接返回false
       return false;
     }
 

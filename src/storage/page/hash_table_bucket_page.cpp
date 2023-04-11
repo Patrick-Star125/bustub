@@ -20,19 +20,12 @@
 namespace bustub {
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-void HASH_TABLE_BUCKET_TYPE::SetUnreadable(uint32_t bucket_idx) {
-  uint32_t index = bucket_idx / 8;
-  uint32_t offset = bucket_idx % 8;
-  readable_[index] &= ~(1 << offset);
-}
-
-template <typename KeyType, typename ValueType, typename KeyComparator>
-bool HASH_TABLE_BUCKET_TYPE::GetValue(KeyType key, KeyComparator cmp, std::vector<ValueType> *result) {
-  bool flag = false;
-  uint32_t bucket_array_size = BUCKET_ARRAY_SIZE;
-  for (uint32_t i = 0; i < bucket_array_size; i++) {
+auto HASH_TABLE_BUCKET_TYPE::GetValue(KeyType key, KeyComparator cmp, std::vector<ValueType> *result) -> bool {
+  bool flag = false;  // 标志是否找到相应value值
+  uint32_t array_size = BUCKET_ARRAY_SIZE;
+  for (uint32_t i = 0; i < array_size; i++) {
     if (IsReadable(i) && cmp(array_[i].first, key) == 0) {
-      result->push_back(array_[i].second);
+      result->emplace_back(array_[i].second);
       flag = true;
     } else if (!IsOccupied(i)) {  // 提前结束寻找
       break;
@@ -42,42 +35,41 @@ bool HASH_TABLE_BUCKET_TYPE::GetValue(KeyType key, KeyComparator cmp, std::vecto
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-bool HASH_TABLE_BUCKET_TYPE::Insert(KeyType key, ValueType value, KeyComparator cmp) {
-  uint32_t bucket_array_size = BUCKET_ARRAY_SIZE;
-  uint32_t insert_index = bucket_array_size;  // 可以插入的位置
-  for (uint32_t i = 0; i < bucket_array_size; i++) {
+auto HASH_TABLE_BUCKET_TYPE::Insert(KeyType key, ValueType value, KeyComparator cmp) -> bool {
+  uint32_t array_size = BUCKET_ARRAY_SIZE;
+  uint32_t pos = array_size;  // 可以插入的位置
+  for (uint32_t i = 0; i < array_size; i++) {
     if (IsReadable(i) && cmp(array_[i].first, key) == 0 && array_[i].second == value) {  // 是否存在相同的元素
       return false;
     }
-
     if (!IsReadable(i)) {
-      if (insert_index == bucket_array_size) {
-        insert_index = i;
+      if (pos == array_size) {  // 插入位置尚未设置
+        pos = i;
       }
       if (!IsOccupied(i)) {  // 提前结束寻找
         break;
       }
     }
   }
-  if (insert_index == bucket_array_size) {  // bucket已满
+  if (pos == array_size) {  // bucket已满
     return false;
   }
-  array_[insert_index].first = key;
-  array_[insert_index].second = value;
-  SetOccupied(insert_index);  // 同时设置标志位
-  SetReadable(insert_index);
+  // 设置kv值，同时设置标志位
+  array_[pos].first = key;
+  array_[pos].second = value;
+  SetOccupied(pos);
+  SetReadable(pos);
   return true;
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-bool HASH_TABLE_BUCKET_TYPE::Remove(KeyType key, ValueType value, KeyComparator cmp) {
-  uint32_t bucket_array_size = BUCKET_ARRAY_SIZE;
-  for (uint32_t i = 0; i < bucket_array_size; i++) {
+auto HASH_TABLE_BUCKET_TYPE::Remove(KeyType key, ValueType value, KeyComparator cmp) -> bool {
+  uint32_t array_size = BUCKET_ARRAY_SIZE;
+  for (uint32_t i = 0; i < array_size; i++) {
     if (IsReadable(i) && cmp(array_[i].first, key) == 0 && array_[i].second == value) {
       SetUnreadable(i);  // 将可读位设置为无效
       return true;
     }
-
     if (!IsOccupied(i)) {  // 提前结束寻找
       break;
     }
@@ -86,7 +78,7 @@ bool HASH_TABLE_BUCKET_TYPE::Remove(KeyType key, ValueType value, KeyComparator 
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-KeyType HASH_TABLE_BUCKET_TYPE::KeyAt(uint32_t bucket_idx) const {
+auto HASH_TABLE_BUCKET_TYPE::KeyAt(uint32_t bucket_idx) const -> KeyType {
   if (IsReadable(bucket_idx)) {
     return array_[bucket_idx].first;
   }
@@ -94,7 +86,7 @@ KeyType HASH_TABLE_BUCKET_TYPE::KeyAt(uint32_t bucket_idx) const {
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-ValueType HASH_TABLE_BUCKET_TYPE::ValueAt(uint32_t bucket_idx) const {
+auto HASH_TABLE_BUCKET_TYPE::ValueAt(uint32_t bucket_idx) const -> ValueType {
   if (IsReadable(bucket_idx)) {
     return array_[bucket_idx].second;
   }
@@ -107,7 +99,7 @@ void HASH_TABLE_BUCKET_TYPE::RemoveAt(uint32_t bucket_idx) {
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-bool HASH_TABLE_BUCKET_TYPE::IsOccupied(uint32_t bucket_idx) const {
+auto HASH_TABLE_BUCKET_TYPE::IsOccupied(uint32_t bucket_idx) const -> bool {
   uint32_t index = bucket_idx / 8;
   uint32_t offset = bucket_idx % 8;
   return static_cast<bool>(occupied_[index] & (1 << offset));
@@ -121,7 +113,7 @@ void HASH_TABLE_BUCKET_TYPE::SetOccupied(uint32_t bucket_idx) {
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-bool HASH_TABLE_BUCKET_TYPE::IsReadable(uint32_t bucket_idx) const {
+auto HASH_TABLE_BUCKET_TYPE::IsReadable(uint32_t bucket_idx) const -> bool {
   uint32_t index = bucket_idx / 8;
   uint32_t offset = bucket_idx % 8;
   return static_cast<bool>(readable_[index] & (1 << offset));
@@ -135,36 +127,33 @@ void HASH_TABLE_BUCKET_TYPE::SetReadable(uint32_t bucket_idx) {
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-bool HASH_TABLE_BUCKET_TYPE::IsFull() {
+void HASH_TABLE_BUCKET_TYPE::SetUnreadable(uint32_t bucket_idx) {
+  uint32_t index = bucket_idx / 8;
+  uint32_t offset = bucket_idx % 8;
+  readable_[index] &= ~(1 << offset);
+}
+
+template <typename KeyType, typename ValueType, typename KeyComparator>
+auto HASH_TABLE_BUCKET_TYPE::IsFull() -> bool {
   uint32_t exact_div_size = BUCKET_ARRAY_SIZE / 8;  // 整除的部分应该全部为ff
   for (uint32_t i = 0; i < exact_div_size; i++) {
-    if (readable_[i] != static_cast<char>(0xff)) {
+    // readable_[i]类型为unsigned char，故可以直接与0xff比较
+    if (readable_[i] != 0xff) {
       return false;
     }
   }
   uint32_t rest = BUCKET_ARRAY_SIZE - BUCKET_ARRAY_SIZE / 8 * 8;  // 只有rest个位为1
-  // 在这里我觉得BUCKET_ARRAY_SIZE / 8更好，但check-clang-tidy会报错，故使用(BUCKET_ARRAY_SIZE - 1) / 8
-  // (rest=0时数组越界) check-clang-tidy报redundant boolean literal in conditional return statement错误,只能写成一行了
-  /*
-    if (rest != 0 && readable_[(BUCKET_ARRAY_SIZE - 1) / 8] != static_cast<char>((1 << rest) - 1)) {
-    return false;
-  }
-  return true;
-  */
-  return !(rest != 0 && readable_[(BUCKET_ARRAY_SIZE - 1) / 8] != static_cast<char>((1 << rest) - 1));
-}
-template <typename KeyType, typename ValueType, typename KeyComparator>
-uint32_t HASH_TABLE_BUCKET_TYPE::Size() {  // 返回桶的大小
-  return BUCKET_ARRAY_SIZE;
+  unsigned char expect_value = (1 << rest) - 1;
+  return !(rest != 0 && readable_[(BUCKET_ARRAY_SIZE - 1) / 8] != expect_value);
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-uint32_t HASH_TABLE_BUCKET_TYPE::NumReadable() {
+auto HASH_TABLE_BUCKET_TYPE::NumReadable() -> uint32_t {
   uint32_t cnt = 0;
-  uint32_t read_array_size = (BUCKET_ARRAY_SIZE - 1) / 8 + 1;
-  int n;
-  for (uint32_t i = 0; i < read_array_size; i++) {
-    n = static_cast<int>(readable_[i]);
+  uint32_t array_size = (BUCKET_ARRAY_SIZE - 1) / 8 + 1;
+  unsigned char n;
+  for (uint32_t i = 0; i < array_size; i++) {
+    n = readable_[i];
     while (n != 0) {
       n &= n - 1;  // 将最低位1清0, 计算1的个数
       cnt++;
@@ -174,10 +163,15 @@ uint32_t HASH_TABLE_BUCKET_TYPE::NumReadable() {
 }
 
 template <typename KeyType, typename ValueType, typename KeyComparator>
-bool HASH_TABLE_BUCKET_TYPE::IsEmpty() {
-  uint32_t read_array_size = (BUCKET_ARRAY_SIZE - 1) / 8 + 1;
-  for (uint32_t i = 0; i < read_array_size; i++) {
-    if (readable_[i] != static_cast<char>(0)) {  // 不能直接与0比较
+auto HASH_TABLE_BUCKET_TYPE::Size() -> uint32_t {  // 返回桶的大小
+  return BUCKET_ARRAY_SIZE;
+}
+
+template <typename KeyType, typename ValueType, typename KeyComparator>
+auto HASH_TABLE_BUCKET_TYPE::IsEmpty() -> bool {
+  uint32_t array_size = (BUCKET_ARRAY_SIZE - 1) / 8 + 1;
+  for (uint32_t i = 0; i < array_size; i++) {
+    if (readable_[i] != 0) {
       return false;
     }
   }
@@ -206,18 +200,6 @@ void HASH_TABLE_BUCKET_TYPE::PrintBucket() {
   LOG_INFO("Bucket Capacity: %lu, Size: %u, Taken: %u, Free: %u", BUCKET_ARRAY_SIZE, size, taken, free);
 }
 
-template <typename KeyType, typename ValueType, typename KeyComparator>
-std::vector<MappingType> HASH_TABLE_BUCKET_TYPE::GetAllItem() {
-  uint32_t bucket_size = BUCKET_ARRAY_SIZE;
-  std::vector<MappingType> items;
-  items.reserve(bucket_size);
-  for (uint32_t i = 0; i < bucket_size; i++) {
-    if (IsReadable(i)) {
-      items.emplace_back(array_[i]);
-    }
-  }
-  return items;
-}
 // DO NOT REMOVE ANYTHING BELOW THIS LINE
 template class HashTableBucketPage<int, int, IntComparator>;
 

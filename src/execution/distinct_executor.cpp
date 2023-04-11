@@ -34,7 +34,7 @@ void DistinctExecutor::Init() {
   tuples_iter_ = tuples_.cbegin();
 }
 
-bool DistinctExecutor::Next(Tuple *tuple, RID *rid) {
+auto DistinctExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   if (tuples_iter_ == tuples_.cend()) {
     return false;
   }

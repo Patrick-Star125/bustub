@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "execution/executors/hash_join_executor.h"
+#include "execution/expressions/abstract_expression.h"
 
 namespace bustub {
 
@@ -39,12 +40,11 @@ void HashJoinExecutor::Init() {
   right_executor_->Init();
   hash_table_.clear();
   auto right_schema = right_executor_->GetOutputSchema();
-
   Tuple right_tuple;
   RID right_rid;
   Value right_key;
   bool res;
-  while (true) {
+  while (true) {  // 构建右半部的key-tuple映射
     res = right_executor_->Next(&right_tuple, &right_rid);
     if (!res) {
       break;
@@ -58,48 +58,50 @@ void HashJoinExecutor::Init() {
       hash_table_[right_key].emplace_back(right_tuple);
     }
   }
-  left_need_next_ = true;
-  array_index_ = 0;
+  first_execution_ = true;
 }
 
-bool HashJoinExecutor::Next(Tuple *tuple, RID *rid) {
+// 找到存在于哈希表中左半部元组
+auto HashJoinExecutor::FindLeftTuple(const Schema *left_schema) -> bool {
+  bool res;
+  do {
+    res = left_executor_->Next(&left_tuple_, &left_rid_);
+    if (!res) {
+      return false;
+    }
+    left_key_ = plan_->LeftJoinKeyExpression()->Evaluate(&left_tuple_, left_schema);
+  } while (hash_table_.count(left_key_) == 0);
+  array_index_ = 0;  // 重置访问位置
+  return true;
+}
+
+auto HashJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   auto left_schema = left_executor_->GetOutputSchema();
   auto right_schema = right_executor_->GetOutputSchema();
   auto final_schema = plan_->OutputSchema();
-  bool left_res;
+  bool res;
 
   if (hash_table_.empty()) {  // 右半部为空
     return false;
   }
 
-  if (left_need_next_) {  // 找到第一个在hash表的左半部元组
-    do {
-      left_res = left_executor_->Next(&left_tuple_, &left_rid_);
-      if (!left_res) {
-        return false;
-      }
-
-      left_key_ = plan_->LeftJoinKeyExpression()->Evaluate(&left_tuple_, left_schema);  // 得到
-    } while (hash_table_.count(left_key_) == 0);
-    left_need_next_ = false;
+  if (first_execution_) {  // 找到第一个在hash表的左半部元组
+    res = FindLeftTuple(left_schema);
+    if (!res) {
+      return false;
+    }
+    first_execution_ = false;
   }
 
   while (true) {
     if (array_index_ >= hash_table_[left_key_].size()) {  // 超出右半部value数组范围，重新开始，需要寻找下一个左半部元组
-      do {
-        left_res = left_executor_->Next(&left_tuple_, &left_rid_);
-        if (!left_res) {
-          return false;
-        }
-
-        left_key_ = plan_->LeftJoinKeyExpression()->Evaluate(&left_tuple_, left_schema);
-      } while (hash_table_.count(left_key_) == 0);
-      array_index_ = 0;
+      res = FindLeftTuple(left_schema);
+      if (!res) {
+        return false;
+      }
     }
-
     TupleSchemaTranformUseEvaluateJoin(&left_tuple_, left_schema, &hash_table_[left_key_][array_index_], right_schema,
                                        tuple, final_schema);
-    // *rid = tuple->GetRid(); 合成的元组没有RID
     array_index_++;  // 指向下一位置
     return true;
   }

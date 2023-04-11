@@ -52,7 +52,7 @@ class ExtendibleHashTable {
    * @param value the value to be associated with the key
    * @return true if insert succeeded, false otherwise
    */
-  bool Insert(Transaction *transaction, const KeyType &key, const ValueType &value);
+  auto Insert(Transaction *transaction, const KeyType &key, const ValueType &value) -> bool;
 
   /**
    * Deletes the associated value for the given key.
@@ -62,7 +62,7 @@ class ExtendibleHashTable {
    * @param value the value to delete
    * @return true if remove succeeded, false otherwise
    */
-  bool Remove(Transaction *transaction, const KeyType &key, const ValueType &value);
+  auto Remove(Transaction *transaction, const KeyType &key, const ValueType &value) -> bool;
 
   /**
    * Performs a point query on the hash table.
@@ -72,22 +72,17 @@ class ExtendibleHashTable {
    * @param[out] result the value(s) associated with a given key
    * @return the value(s) associated with the given key
    */
-  bool GetValue(Transaction *transaction, const KeyType &key, std::vector<ValueType> *result);
+  auto GetValue(Transaction *transaction, const KeyType &key, std::vector<ValueType> *result) -> bool;
 
   /**
    * Returns the global depth.  Do not touch.
    */
-  uint32_t GetGlobalDepth();
+  auto GetGlobalDepth() -> uint32_t;
 
   /**
    * Helper function to verify the integrity of the extendible hash table's directory.  Do not touch.
    */
   void VerifyIntegrity();
-
-  // 测试函数
-  void PrintDir();
-
-  void RemoveAllItem(Transaction *transaction, uint32_t bucket_idx);
 
  private:
   /**
@@ -97,7 +92,7 @@ class ExtendibleHashTable {
    * @param key the key to hash
    * @return the downcasted 32-bit hash
    */
-  inline uint32_t Hash(KeyType key);
+  inline auto Hash(KeyType key) -> uint32_t;
 
   /**
    * KeyToDirectoryIndex - maps a key to a directory index
@@ -115,7 +110,7 @@ class ExtendibleHashTable {
    * @param dir_page to use for lookup of global depth
    * @return the directory index
    */
-  inline uint32_t KeyToDirectoryIndex(KeyType key, HashTableDirectoryPage *dir_page);
+  inline auto KeyToDirectoryIndex(KeyType key, HashTableDirectoryPage *dir_page) -> uint32_t;
 
   /**
    * Get the bucket page_id corresponding to a key.
@@ -124,18 +119,14 @@ class ExtendibleHashTable {
    * @param dir_page a pointer to the hash table's directory page
    * @return the bucket page_id corresponding to the input key
    */
-  inline page_id_t KeyToPageId(KeyType key, HashTableDirectoryPage *dir_page);
-
-  HashTableDirectoryPage *CreateDirectoryPage(page_id_t *bucket_page_id);
-
-  HASH_TABLE_BUCKET_TYPE *CreateBucketPage(page_id_t *bucket_page_id);
+  inline auto KeyToPageId(KeyType key, HashTableDirectoryPage *dir_page) -> uint32_t;
 
   /**
    * Fetches the directory page from the buffer pool manager.
    *
    * @return a pointer to the directory page
    */
-  HashTableDirectoryPage *FetchDirectoryPage();
+  auto FetchDirectoryPage() -> HashTableDirectoryPage *;
 
   /**
    * Fetches the a bucket page from the buffer pool manager using the bucket's page_id.
@@ -143,7 +134,7 @@ class ExtendibleHashTable {
    * @param bucket_page_id the page_id to fetch
    * @return a pointer to a bucket page
    */
-  HASH_TABLE_BUCKET_TYPE *FetchBucketPage(page_id_t bucket_page_id);
+  auto FetchBucketPage(page_id_t bucket_page_id) -> HASH_TABLE_BUCKET_TYPE *;
 
   /**
    * Performs insertion with an optional bucket splitting.
@@ -153,7 +144,7 @@ class ExtendibleHashTable {
    * @param value the value to insert
    * @return whether or not the insertion was successful
    */
-  bool SplitInsert(Transaction *transaction, const KeyType &key, const ValueType &value);
+  auto SplitInsert(Transaction *transaction, const KeyType &key, const ValueType &value) -> bool;
 
   /**
    * Optionally merges an empty bucket into it's pair.  This is called by Remove,
@@ -170,13 +161,18 @@ class ExtendibleHashTable {
    */
   void Merge(Transaction *transaction, const KeyType &key, const ValueType &value);
 
-  bool ExtraMerge(Transaction *transaction, const KeyType &key, const ValueType &value);  // 额外的合并操作
+  HashTableDirectoryPage *CreateDirectoryPage(page_id_t *bucket_page_id);
+
+  HASH_TABLE_BUCKET_TYPE *CreateBucketPage(page_id_t *bucket_page_id);
+
+  bool ExtraMerge(Transaction *transaction, const KeyType &key, const ValueType &value);  // 循环合并操作
 
   // member variables
   page_id_t directory_page_id_;
   BufferPoolManager *buffer_pool_manager_;
   KeyComparator comparator_;
 
+  HashTableDirectoryPage *dir_page_;  // 目录页缓存
   // Readers includes inserts and removes, writers are splits and merges
   ReaderWriterLatch table_latch_;
   HashFunction<KeyType> hash_fn_;

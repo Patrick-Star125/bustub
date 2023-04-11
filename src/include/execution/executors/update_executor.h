@@ -18,7 +18,6 @@
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
-#include "execution/expressions/abstract_expression.h"
 #include "execution/plans/update_plan.h"
 #include "storage/table/tuple.h"
 #include "type/value_factory.h"
@@ -54,10 +53,10 @@ class UpdateExecutor : public AbstractExecutor {
    * NOTE: UpdateExecutor::Next() does not use the `tuple` out-parameter.
    * NOTE: UpdateExecutor::Next() does not use the `rid` out-parameter.
    */
-  bool Next([[maybe_unused]] Tuple *tuple, RID *rid) override;
+  auto Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool override;
 
   /** @return The output schema for the update */
-  const Schema *GetOutputSchema() override { return plan_->OutputSchema(); };
+  auto GetOutputSchema() -> const Schema * override { return plan_->OutputSchema(); };
 
  private:
   /**
@@ -65,7 +64,7 @@ class UpdateExecutor : public AbstractExecutor {
    * based on the `UpdateInfo` provided in the plan.
    * @param src_tuple The tuple to be updated
    */
-  Tuple GenerateUpdatedTuple(const Tuple &src_tuple);
+  auto GenerateUpdatedTuple(const Tuple &src_tuple) -> Tuple;
 
   /** The update plan node to be executed */
   const UpdatePlanNode *plan_;

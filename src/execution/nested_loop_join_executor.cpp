@@ -37,30 +37,30 @@ void NestedLoopJoinExecutor::TupleSchemaTranformUseEvaluateJoin(const Tuple *lef
 void NestedLoopJoinExecutor::Init() {
   left_executor_->Init();
   right_executor_->Init();
-  left_need_next_ = true;
+  first_execution_ = true;
 }
 
-bool NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) {
+auto NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   auto predicate = plan_->Predicate();
   auto left_schema = left_executor_->GetOutputSchema();
   auto right_schema = right_executor_->GetOutputSchema();
   auto final_schema = plan_->OutputSchema();
   Tuple right_tuple;
-  bool left_res;
-  bool right_res;
+  bool left_res;   // 左半部执行结果
+  bool right_res;  // 右半部执行结果
   bool predicate_res;
 
-  if (left_need_next_) {  // 第一次next调用
+  if (first_execution_) {  // 第一次next调用
     left_res = left_executor_->Next(&left_tuple_, &left_rid_);
     right_res = right_executor_->Next(&right_tuple_, &right_rid_);
-    left_need_next_ = false;
+    first_execution_ = false;
     if (!left_res || !right_res) {  // 如果左半部为空或右半部为空
       return false;
     }
     predicate_res = predicate->EvaluateJoin(&left_tuple_, left_schema, &right_tuple_, right_schema).GetAs<bool>();
     if (predicate_res) {
       TupleSchemaTranformUseEvaluateJoin(&left_tuple_, left_schema, &right_tuple_, right_schema, tuple, final_schema);
-      // *rid = tuple->GetRid(); 合成的元组没有RID
+      *rid = tuple->GetRid();
       return true;
     }
   }
@@ -69,7 +69,7 @@ bool NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) {
     right_res = right_executor_->Next(&right_tuple_, &right_rid_);
     if (!right_res) {  // 右半部到了末尾：左半部加一，右半部重新开始
       left_res = left_executor_->Next(&left_tuple_, &left_rid_);
-      if (!left_res) {
+      if (!left_res) {  // 左半部到达末尾，结束执行
         return false;
       }
       right_executor_->Init();
@@ -79,7 +79,6 @@ bool NestedLoopJoinExecutor::Next(Tuple *tuple, RID *rid) {
     predicate_res = predicate->EvaluateJoin(&left_tuple_, left_schema, &right_tuple_, right_schema).GetAs<bool>();
     if (predicate_res) {
       TupleSchemaTranformUseEvaluateJoin(&left_tuple_, left_schema, &right_tuple_, right_schema, tuple, final_schema);
-      // *rid = tuple->GetRid(); 合成的元组没有RID
       return true;
     }
   }

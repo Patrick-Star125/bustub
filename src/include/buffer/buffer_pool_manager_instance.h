@@ -15,7 +15,6 @@
 #include <list>
 #include <mutex>  // NOLINT
 #include <unordered_map>
-#include <vector>
 
 #include "buffer/buffer_pool_manager.h"
 #include "buffer/lru_replacer.h"
@@ -54,18 +53,10 @@ class BufferPoolManagerInstance : public BufferPoolManager {
   ~BufferPoolManagerInstance() override;
 
   /** @return size of the buffer pool */
-  size_t GetPoolSize() override { return pool_size_; }
+  auto GetPoolSize() -> size_t override { return pool_size_; }
 
   /** @return pointer to all the pages in the buffer pool */
-  Page *GetPages() { return pages_; }
-
-  size_t GetOccupiedPageNum() { return page_table_.size() - replacer_->Size(); }
-
-  void PrintExistPageId() {
-    for (auto item : page_table_) {
-      printf("page id is:%d pin count is %d\n", item.first, pages_[item.second].pin_count_);
-    }
-  }
+  auto GetPages() -> Page * { return pages_; }
 
  protected:
   /**
@@ -73,7 +64,7 @@ class BufferPoolManagerInstance : public BufferPoolManager {
    * @param page_id id of page to be fetched
    * @return the requested page
    */
-  Page *FetchPgImp(page_id_t page_id) override;
+  auto FetchPgImp(page_id_t page_id) -> Page * override;
 
   /**
    * Unpin the target page from the buffer pool.
@@ -81,28 +72,28 @@ class BufferPoolManagerInstance : public BufferPoolManager {
    * @param is_dirty true if the page should be marked as dirty, false otherwise
    * @return false if the page pin count is <= 0 before this call, true otherwise
    */
-  bool UnpinPgImp(page_id_t page_id, bool is_dirty) override;
+  auto UnpinPgImp(page_id_t page_id, bool is_dirty) -> bool override;
 
   /**
    * Flushes the target page to disk.
    * @param page_id id of page to be flushed, cannot be INVALID_PAGE_ID
    * @return false if the page could not be found in the page table, true otherwise
    */
-  bool FlushPgImp(page_id_t page_id) override;
+  auto FlushPgImp(page_id_t page_id) -> bool override;
 
   /**
    * Creates a new page in the buffer pool.
    * @param[out] page_id id of created page
    * @return nullptr if no new pages could be created, otherwise pointer to new page
    */
-  Page *NewPgImp(page_id_t *page_id) override;
+  auto NewPgImp(page_id_t *page_id) -> Page * override;
 
   /**
    * Deletes a page from the buffer pool.
    * @param page_id id of page to be deleted
    * @return false if the page exists but could not be deleted, true if the page didn't exist or deletion succeeded
    */
-  bool DeletePgImp(page_id_t page_id) override;
+  auto DeletePgImp(page_id_t page_id) -> bool override;
 
   /**
    * Flushes all the pages in the buffer pool to disk.
@@ -113,7 +104,7 @@ class BufferPoolManagerInstance : public BufferPoolManager {
    * Allocate a page on disk.∂
    * @return the id of the allocated page
    */
-  page_id_t AllocatePage();
+  auto AllocatePage() -> page_id_t;
 
   /**
    * Deallocate a page on disk.
@@ -130,6 +121,10 @@ class BufferPoolManagerInstance : public BufferPoolManager {
    */
   void ValidatePageId(page_id_t page_id) const;
 
+  // 获取页框，进入函数前需加锁
+  frame_id_t GetFrame();
+
+  static const frame_id_t NUMLL_FRAME = -1;
   /** Number of pages in the buffer pool. */
   const size_t pool_size_;
   /** How many instances are in the parallel BPM (if present, otherwise just 1 BPI) */
@@ -145,7 +140,7 @@ class BufferPoolManagerInstance : public BufferPoolManager {
   DiskManager *disk_manager_ __attribute__((__unused__));
   /** Pointer to the log manager. */
   LogManager *log_manager_ __attribute__((__unused__));
-  /** Page table for keepi__attribute__ng track of buffer pool pages. */
+  /** Page table for keeping track of buffer pool pages. */
   std::unordered_map<page_id_t, frame_id_t> page_table_;
   /** Replacer to find unpinned pages for replacement. */
   Replacer *replacer_;

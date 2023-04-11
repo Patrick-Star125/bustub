@@ -15,7 +15,7 @@
 namespace bustub {
 
 SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan)
-    : AbstractExecutor(exec_ctx), plan_(plan), table_iter_(nullptr, RID(INVALID_PAGE_ID, 0), nullptr) {}
+    : AbstractExecutor(exec_ctx), plan_(plan), table_iter_(nullptr, RID(), nullptr) {}
 
 // Tuple中许多方法都是针对完整模式（table schema）而言的，对切割后的模式使用很容易发生数组越界
 // 两模式中两列是一样的是很难判断的，因为列名可以改变，只能通过原始表的列序号，但其隐藏在ColumnValueExpression类中
@@ -35,7 +35,7 @@ void SeqScanExecutor::TupleSchemaTranformUseEvaluate(const Tuple *table_tuple, c
 }
 
 // 通过列名，偏移量判断模式是否相同
-bool SeqScanExecutor::SchemaEqual(const Schema *table_schema, const Schema *output_schema) {
+auto SeqScanExecutor::SchemaEqual(const Schema *table_schema, const Schema *output_schema) -> bool {
   auto table_colums = table_schema->GetColumns();
   auto output_colums = output_schema->GetColumns();
   if (table_colums.size() != output_colums.size()) {
@@ -66,16 +66,34 @@ void SeqScanExecutor::Init() {
   auto output_schema = plan_->OutputSchema();
   auto table_schema = table_info_->schema_;
   is_same_schema_ = SchemaEqual(&table_schema, output_schema);
+
+  // 可重复读：给所有元组加上读锁，事务提交后再解锁
+  auto transaction = exec_ctx_->GetTransaction();
+  auto lockmanager = exec_ctx_->GetLockManager();
+  if (transaction->GetIsolationLevel() == IsolationLevel::REPEATABLE_READ) {
+    auto iter = table_info_->table_->Begin(exec_ctx_->GetTransaction());
+    while (iter != table_info_->table_->End()) {
+      lockmanager->LockShared(transaction, iter->GetRid());
+      ++iter;
+    }
+  }
 }
 
-bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
+auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   auto predicate = plan_->GetPredicate();
   auto output_schema = plan_->OutputSchema();
   auto table_schema = table_info_->schema_;
+  auto transaction = exec_ctx_->GetTransaction();
+  auto lockmanager = exec_ctx_->GetLockManager();
   bool res;
 
   while (table_iter_ != table_info_->table_->End()) {
-    auto p_tuple = &(*table_iter_);  // 获取指向元祖的指针
+    // 读已提交：读元组时加上读锁，读完后立即释放
+    if (transaction->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
+      lockmanager->LockShared(transaction, table_iter_->GetRid());
+    }
+
+    auto p_tuple = &(*table_iter_);  // 获取指向元组的指针
     res = true;
     if (predicate != nullptr) {
       res = predicate->Evaluate(p_tuple, &table_schema).GetAs<bool>();
@@ -87,12 +105,15 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
       } else {
         *tuple = *p_tuple;
       }
-      *rid = p_tuple->GetRid();  // 返回行元组的RID
-      ++table_iter_;             // 指向下一位置后再返回
+      *rid = p_tuple->GetRid();  // 返回行元组的ID
+    }
+    if (transaction->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
+      lockmanager->Unlock(transaction, table_iter_->GetRid());
+    }
+    ++table_iter_;  // 指向下一位置后再返回
+    if (res) {
       return true;
     }
-
-    ++table_iter_;  // 指向下一位置后再返回
   }
   return false;
 }
